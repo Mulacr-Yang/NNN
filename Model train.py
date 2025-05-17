@@ -8,8 +8,8 @@ from pathlib import Path
 from pyswarm import pso
 
 VOLTAGE_LIMITS = [-90, 20]
-SPIKE_THRESHOLD = -50  # 尖峰阈值 (mV)
-VOLTAGE_THRESHOLD = -65.0  # 高/低电压阈值 (mV)
+SPIKE_THRESHOLD = -50
+VOLTAGE_THRESHOLD = -65.0
 
 
 def make_folder(name, root_dir='./png'):
@@ -27,7 +27,6 @@ def setup_animation_folder(base_dir='./png', prefix="multi_neuron"):
 
 
 def detect_spikes(V, dt, V_th=SPIKE_THRESHOLD):
-    """检测尖峰时刻"""
     spikes = []
     for i in range(1, len(V)):
         if V[i] > V_th and V[i - 1] <= V_th:
@@ -36,14 +35,12 @@ def detect_spikes(V, dt, V_th=SPIKE_THRESHOLD):
 
 
 def compute_spike_frequency(spike_times, T):
-    """计算尖峰频率 (Hz)"""
     if len(spike_times) < 2:
         return 0.0
     return (len(spike_times) - 1) / (T / 1000.0)
 
 
 def generate_neuron_parameters(neuron_idx):
-    """为每个神经元生成自由的参数（初始值）"""
     bifurcation_types = ['SNIC', 'saddle-node', 'supercritical_Hopf', 'subcritical_Hopf']
     bifurcation_type = np.random.choice(bifurcation_types)
 
@@ -66,7 +63,6 @@ def generate_neuron_parameters(neuron_idx):
 
 
 def params_to_neurons(params, N_input=6, N_hidden=4, N_output=2):
-    """将 PSO 参数向量转换为神经元列表"""
     param_names = ['C_m', 'g_Na', 'g_K', 'g_L', 'E_L', 'V_mid_m', 'V_mid_n', 'k_m', 'k_n']
     bifurcation_types = ['SNIC', 'saddle-node', 'supercritical_Hopf', 'subcritical_Hopf']
 
@@ -109,7 +105,6 @@ def params_to_neurons(params, N_input=6, N_hidden=4, N_output=2):
 
 
 def save_neuron_parameters(neurons, layer_name, save_folder):
-    """保存神经元参数到文件"""
     output_path = os.path.join(save_folder, f'{layer_name}_parameters.txt')
     with open(output_path, 'w', encoding='utf-8') as f:
         for i, neuron in enumerate(neurons):
@@ -122,7 +117,6 @@ def save_neuron_parameters(neurons, layer_name, save_folder):
 
 
 def generate_input_data(num_samples=8, T=100, dt=0.02, seed=42):
-    """生成 [n, V] 初始条件数据"""
     np.random.seed(seed)
     data = []
     labels = []
@@ -144,7 +138,6 @@ def generate_input_data(num_samples=8, T=100, dt=0.02, seed=42):
 
 
 def simulate_network(input_neurons, hidden_neurons, output_neurons, initial_states, T=100, dt=0.02):
-    """模拟三层神经网络"""
     N_input = len(input_neurons)
     N_hidden = len(hidden_neurons)
     N_output = len(output_neurons)
@@ -252,7 +245,6 @@ def simulate_network(input_neurons, hidden_neurons, output_neurons, initial_stat
 
 
 def evaluate_output(V_output, T, dt):
-    """评估输出层，基于尖峰频率分类"""
     spikes_1 = detect_spikes(V_output[0], dt)
     spikes_2 = detect_spikes(V_output[1], dt)
     freq_1 = compute_spike_frequency(spikes_1, T)
@@ -261,7 +253,6 @@ def evaluate_output(V_output, T, dt):
 
 
 def objective_function(params, data, labels, T=100, dt=0.02, save_folder=None):
-    """PSO 目标函数：返回负准确率"""
     input_neurons, hidden_neurons, output_neurons = params_to_neurons(params)
     correct = 0
     for initial_states, true_label in zip(data, labels):
@@ -274,8 +265,7 @@ def objective_function(params, data, labels, T=100, dt=0.02, save_folder=None):
             correct += 1
     accuracy = correct / len(data)
     print(colored(f"Current accuracy: {accuracy * 100:.2f}%", 'cyan'))
-    # 保存当前参数（如果准确率高）
-    if save_folder and accuracy > 0.7:  # 仅保存较高准确率的参数
+    if save_folder and accuracy > 0.7:
         save_neuron_parameters(input_neurons, f'input_interim_{accuracy:.2f}', save_folder)
         save_neuron_parameters(hidden_neurons, f'hidden_interim_{accuracy:.2f}', save_folder)
         save_neuron_parameters(output_neurons, f'output_interim_{accuracy:.2f}', save_folder)
@@ -283,7 +273,6 @@ def objective_function(params, data, labels, T=100, dt=0.02, save_folder=None):
 
 
 def train_network(data, labels, save_folder, T=100, dt=0.02):
-    """使用 PSO 训练网络参数"""
     N_input, N_hidden, N_output = 6, 4, 2
     params_per_neuron = 9
     total_params = (N_input + N_hidden + N_output) * params_per_neuron
