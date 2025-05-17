@@ -7,8 +7,8 @@ from NeuronModel_d import *
 from pathlib import Path
 
 VOLTAGE_LIMITS = [-90, 20]
-SPIKE_THRESHOLD = -50  # 尖峰阈值 (mV)
-VOLTAGE_THRESHOLD = -65.0  # 高/低电压阈值 (mV)
+SPIKE_THRESHOLD = -50
+VOLTAGE_THRESHOLD = -65.0
 
 
 def make_folder(name, root_dir='./png'):
@@ -40,7 +40,6 @@ def setup_phase_portrait_ax(show_ax=True):
 
 
 def detect_spikes(V, dt, V_th=SPIKE_THRESHOLD):
-    """检测尖峰时刻"""
     spikes = []
     for i in range(1, len(V)):
         if V[i] > V_th and V[i - 1] <= V_th:
@@ -49,14 +48,12 @@ def detect_spikes(V, dt, V_th=SPIKE_THRESHOLD):
 
 
 def compute_spike_frequency(spike_times, T):
-    """计算尖峰频率 (Hz)"""
     if len(spike_times) < 2:
         return 0.0
     return (len(spike_times) - 1) / (T / 1000.0)
 
 
 def compute_vector_field(neuron, V_range, n_range, I_syn=0.0):
-    """计算向量场"""
     V_grid, n_grid = np.meshgrid(V_range, n_range)
     dV_dt = np.zeros_like(V_grid)
     dn_dt = np.zeros_like(n_grid)
@@ -70,7 +67,6 @@ def compute_vector_field(neuron, V_range, n_range, I_syn=0.0):
 
 
 def generate_neuron_parameters(bifurcation_type, neuron_idx):
-    """为每个神经元生成独特的参数"""
     base_params = {
         'SNIC': {
             'C_m': 1.0, 'g_Na': 20.0, 'g_K': 10.0, 'g_L': 8.0,
@@ -96,7 +92,6 @@ def generate_neuron_parameters(bifurcation_type, neuron_idx):
 
     params = base_params[bifurcation_type].copy()
 
-    # 添加 ±10% 随机扰动
     np.random.seed(neuron_idx)
     for key in ['C_m', 'g_Na', 'g_K', 'g_L', 'V_mid_m', 'V_mid_n', 'k_m', 'k_n']:
         params[key] *= np.random.uniform(0.9, 1.1)
@@ -105,7 +100,6 @@ def generate_neuron_parameters(bifurcation_type, neuron_idx):
 
 
 def save_neuron_parameters(neurons, layer_name, save_folder):
-    """保存神经元参数到文件"""
     output_path = os.path.join(save_folder, f'{layer_name}_parameters.txt')
     with open(output_path, 'w', encoding='utf-8') as f:
         for i, neuron in enumerate(neurons):
@@ -118,20 +112,17 @@ def save_neuron_parameters(neurons, layer_name, save_folder):
 
 
 def generate_input_data(num_samples=10, T=200, dt=0.01):
-    """生成 [n, V] 初始条件数据"""
-    np.random.seed(42)  # 固定种子以确保可重复性
+    np.random.seed(42)
     data = []
     labels = []
 
     for _ in range(num_samples):
-        # 为 6 个输入神经元生成初始状态
         initial_states = []
         for _ in range(6):
-            V = np.random.uniform(-80.0, -50.0)  # 膜电位范围
-            n = np.random.uniform(0.0, 1.0)  # 钾离子激活变量范围
+            V = np.random.uniform(-80.0, -50.0)
+            n = np.random.uniform(0.0, 1.0)
             initial_states.append([n, V])
         initial_states = np.array(initial_states)  # Shape: (6, 2)
-        # 标签基于平均起始电压
         avg_V = np.mean(initial_states[:, 1])
         label = 1 if avg_V > VOLTAGE_THRESHOLD else 0
         data.append(initial_states)
@@ -142,7 +133,6 @@ def generate_input_data(num_samples=10, T=200, dt=0.01):
 
 
 def simulate_network(input_neurons, hidden_neurons, output_neurons, initial_states, T=200, dt=0.01):
-    """模拟三层神经网络"""
     N_input = len(input_neurons)
     N_hidden = len(hidden_neurons)
     N_output = len(output_neurons)
@@ -150,7 +140,6 @@ def simulate_network(input_neurons, hidden_neurons, output_neurons, initial_stat
     t = np.arange(0, T, dt)
     nt = len(t)
 
-    # 状态数组
     V_input = np.zeros((N_input, nt))
     n_input = np.zeros((N_input, nt))
     V_hidden = np.zeros((N_hidden, nt))
@@ -158,16 +147,13 @@ def simulate_network(input_neurons, hidden_neurons, output_neurons, initial_stat
     V_output = np.zeros((N_output, nt))
     n_output = np.zeros((N_output, nt))
 
-    # 突触电导
     g_syn_ih = np.zeros((N_input, N_hidden, nt))
     g_syn_ho = np.zeros((N_hidden, N_output, nt))
 
-    # 设置输入层初始状态
     for j in range(N_input):
         n_input[j, 0] = initial_states[j][0]
         V_input[j, 0] = initial_states[j][1]
 
-    # 隐藏层和输出层初始状态
     initial_states_hidden = [
         [-80.0, 0.3], [-80.0, 0.4], [-70.0, 0.2], [-70.0, 0.3]
     ]
@@ -182,26 +168,21 @@ def simulate_network(input_neurons, hidden_neurons, output_neurons, initial_stat
         V_output[j, 0] = initial_states_output[j][0]
         n_output[j, 0] = initial_states_output[j][1]
 
-    # 突触参数
     g_syn_max = 2.0
     tau_syn = 5.0
     E_syn_exc = 0.0
     E_syn_inh = -70.0
 
-    # 突触类型
     syn_type_ih = np.ones((N_input, N_hidden)) * E_syn_exc
     syn_type_ho = np.ones((N_hidden, N_output)) * E_syn_exc
 
-    # 模拟输入层（使用 NeuronModel.simulate）
     for j in range(N_input):
         X0 = [V_input[j, 0], n_input[j, 0]]
         _, solution = input_neurons[j].simulate(T, dt, X0, lambda t: 0.0)
         V_input[j, :] = solution[:, 0]
         n_input[j, :] = solution[:, 1]
 
-    # 模拟隐藏层和输出层
     for i in range(nt - 1):
-        # 隐藏层
         for j in range(N_hidden):
             I_syn_total = 0.0
             for k in range(N_input):
@@ -211,7 +192,6 @@ def simulate_network(input_neurons, hidden_neurons, output_neurons, initial_stat
             V_hidden[j, i + 1] = V_hidden[j, i] + dt * dV_dt
             n_hidden[j, i + 1] = n_hidden[j, i] + dt * dn_dt
 
-        # 输出层
         for j in range(N_output):
             I_syn_total = 0.0
             for k in range(N_hidden):
@@ -221,7 +201,6 @@ def simulate_network(input_neurons, hidden_neurons, output_neurons, initial_stat
             V_output[j, i + 1] = V_output[j, i] + dt * dV_dt
             n_output[j, i + 1] = n_output[j, i] + dt * dn_dt
 
-        # 更新突触电导
         for j in range(N_input):
             if V_input[j, i] <= SPIKE_THRESHOLD and V_input[j, i + 1] > SPIKE_THRESHOLD:
                 for k in range(N_hidden):
@@ -236,7 +215,6 @@ def simulate_network(input_neurons, hidden_neurons, output_neurons, initial_stat
             for k in range(N_output):
                 g_syn_ho[j, k, i + 1] = g_syn_ho[j, k, i] + dt * (-g_syn_ho[j, k, i] / tau_syn)
 
-        # 每 50 ms 更新突触类型
         if i % int(50 / dt) == 0 and i > 0:
             for j in range(N_input):
                 spikes = detect_spikes(V_input[j, :i + 1], dt)
@@ -253,7 +231,6 @@ def simulate_network(input_neurons, hidden_neurons, output_neurons, initial_stat
 
 
 def plot_timeseries(t, V_input, V_hidden, V_output, input_neurons, save_folder, sample_idx):
-    """绘制膜电位时间序列（已注释）"""
     fig, ax = plt.subplots(figsize=(10, 6), facecolor='white')
     ax.set_facecolor('white')
     for i, neuron in enumerate(input_neurons):
@@ -275,11 +252,9 @@ def plot_timeseries(t, V_input, V_hidden, V_output, input_neurons, save_folder, 
 
 def plot_phase_portrait(V_input, n_input, V_hidden, n_hidden, V_output, n_output, input_neurons, hidden_neurons,
                         output_neurons, save_folder, sample_idx):
-    """绘制相图（已注释）"""
     V_range = np.linspace(VOLTAGE_LIMITS[0], VOLTAGE_LIMITS[1], 20)
     n_range = np.linspace(-0.05, 1.05, 20)
 
-    # 输入层
     for i, neuron in enumerate(input_neurons):
         fig, ax = setup_phase_portrait_ax()
         V_grid, n_grid, dV_dt, dn_dt = compute_vector_field(neuron, V_range, n_range, I_syn=10.0)
@@ -294,7 +269,6 @@ def plot_phase_portrait(V_input, n_input, V_hidden, n_hidden, V_output, n_output
         plt.close()
         print(colored(f"Saved phase portrait to {save_path}", 'green'))
 
-    # 隐藏层
     for i in range(len(hidden_neurons)):
         fig, ax = setup_phase_portrait_ax()
         V_grid, n_grid, dV_dt, dn_dt = compute_vector_field(hidden_neurons[i], V_range, n_range, I_syn=10.0)
@@ -308,7 +282,6 @@ def plot_phase_portrait(V_input, n_input, V_hidden, n_hidden, V_output, n_output
         plt.close()
         print(colored(f"Saved phase portrait to {save_path}", 'green'))
 
-    # 输出层
     for i in range(len(output_neurons)):
         fig, ax = setup_phase_portrait_ax()
         V_grid, n_grid, dV_dt, dn_dt = compute_vector_field(output_neurons[i], V_range, n_range, I_syn=10.0)
@@ -324,7 +297,6 @@ def plot_phase_portrait(V_input, n_input, V_hidden, n_hidden, V_output, n_output
 
 
 def evaluate_output(V_output, T, dt):
-    """评估输出层，基于尖峰频率分类"""
     spikes_1 = detect_spikes(V_output[0], dt)
     spikes_2 = detect_spikes(V_output[1], dt)
     freq_1 = compute_spike_frequency(spikes_1, T)
@@ -333,7 +305,6 @@ def evaluate_output(V_output, T, dt):
 
 
 def main():
-    # 创建神经元
     input_neurons = [
         NeuronModel(bifurcation_type='SNIC', **generate_neuron_parameters('SNIC', 0)),
         NeuronModel(bifurcation_type='SNIC', **generate_neuron_parameters('SNIC', 1)),
@@ -353,28 +324,23 @@ def main():
         NeuronModel(bifurcation_type='subcritical_Hopf', **generate_neuron_parameters('subcritical_Hopf', 11))
     ]
 
-    # 保存参数
     save_folder = setup_animation_folder()
     save_neuron_parameters(input_neurons, 'input', save_folder)
     save_neuron_parameters(hidden_neurons, 'hidden', save_folder)
     save_neuron_parameters(output_neurons, 'output', save_folder)
 
-    # 生成数据集
     data, labels, t = generate_input_data(num_samples=100, T=200, dt=0.01)
 
-    # 模拟和评估
     correct = 0
     for idx, (initial_states, true_label) in enumerate(zip(data, labels)):
         t, V_input, n_input, V_hidden, n_hidden, V_output, n_output, g_syn_ih, g_syn_ho = simulate_network(
             input_neurons, hidden_neurons, output_neurons, initial_states, T=200, dt=0.01
         )
 
-        # 注释绘图
         # plot_timeseries(t, V_input, V_hidden, V_output, input_neurons, save_folder, idx)
         # plot_phase_portrait(V_input, n_input, V_hidden, n_hidden, V_output, n_output,
         #                    input_neurons, hidden_neurons, output_neurons, save_folder, idx)
 
-        # 评估
         pred_label = evaluate_output(V_output, T=200, dt=0.01)
         if pred_label == true_label:
             correct += 1
